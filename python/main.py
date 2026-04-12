@@ -27,3 +27,21 @@ def generate(prompt: str):
 @app.get("/chat")
 def chat(prompt: str):
     return StreamingResponse(generate(prompt), media_type="text/plain")
+
+
+def generate_sse(prompt: str):
+    stream = ollama.chat(
+        model="llama3.2:3b", messages=[{"role": "user", "content": prompt}], stream=True
+    )
+
+    for chunk in stream:
+        content = chunk["message"]["content"]
+        if content:
+            yield f"data: {content}\n\n"
+
+    yield "data: [DONE]\n\n"
+
+
+@app.get("/chat-sse")
+def chat_sse(prompt: str):
+    return StreamingResponse(generate_sse(prompt), media_type="text/event-stream")

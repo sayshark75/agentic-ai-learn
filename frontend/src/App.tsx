@@ -8,32 +8,39 @@ export default function App() {
   const [prompt, setPrompt] = useState("");
   const [response, setResponse] = useState("");
 
-  const [isSSE, setIsSSE] = useState(false);
-  const [isNode, setIsNode] = useState(true);
+  // single source of truth
+  const [mode, setMode] = useState("node-stream");
 
   const getUrl = () => {
-    if (isSSE) return "http://localhost:8001/chat-sse";
-    return "http://localhost:8000/chat";
+    switch (mode) {
+      case "node-stream":
+        return "http://localhost:8000/chat";
+      case "node-sse":
+        return "http://localhost:8000/chat-sse";
+      case "python-stream":
+        return "http://localhost:8001/chat";
+      case "python-sse":
+        return "http://localhost:8001/chat-sse";
+      default:
+        return "";
+    }
   };
 
   const handleFetchStream = async () => {
-    try {
-      setResponse("");
+    setResponse("");
 
-      const res = await fetch(`${getUrl()}?prompt=${encodeURIComponent(prompt)}`);
+    const res = await fetch(`${getUrl()}?prompt=${encodeURIComponent(prompt)}`);
 
-      if (!res.body) throw new Error("body not present");
+    if (!res.body) throw new Error("No body");
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        setResponse((prev) => prev + decoder.decode(value));
-      }
-    } catch (err) {
-      console.log(err);
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      setResponse((prev) => prev + decoder.decode(value));
     }
   };
 
@@ -54,7 +61,7 @@ export default function App() {
   const handleSubmit = () => {
     if (!prompt.trim()) return;
 
-    if (isSSE) {
+    if (mode.includes("sse")) {
       handleSSE();
     } else {
       handleFetchStream();
@@ -87,15 +94,18 @@ export default function App() {
       >
         <h2 style={{ marginBottom: 20 }}>⚡ Streaming AI Chat</h2>
 
-        {/* SWITCHES */}
-        <div style={{ display: "flex", gap: 20, marginBottom: 15 }}>
-          <label style={{ cursor: "pointer" }}>
-            <input type="checkbox" checked={isSSE} onChange={() => setIsSSE(!isSSE)} /> SSE Mode
-          </label>
-
-          <label style={{ cursor: "pointer" }}>
-            <input type="checkbox" checked={isNode} onChange={() => setIsNode(!isNode)} /> Node Backend
-          </label>
+        {/* RADIO BUTTONS */}
+        <div style={{ marginBottom: 15, display: "flex", alignItems: "center", justifyContent: "left" }}>
+          {[
+            { label: "Node Stream", value: "node-stream" },
+            { label: "Node SSE", value: "node-sse" },
+            { label: "Python Stream", value: "python-stream" },
+            { label: "Python SSE", value: "python-sse" },
+          ].map((opt) => (
+            <label key={opt.value} style={{ display: "block", marginBottom: 5 }}>
+              <input type="radio" name="mode" value={opt.value} checked={mode === opt.value} onChange={(e) => setMode(e.target.value)} /> {opt.label}
+            </label>
+          ))}
         </div>
 
         {/* INPUT */}
@@ -110,7 +120,6 @@ export default function App() {
               borderRadius: 10,
               border: "none",
               outline: "none",
-              fontSize: 14,
               background: "#1e293b",
               color: "#fff",
             }}
@@ -135,37 +144,18 @@ export default function App() {
         {/* RESPONSE */}
         <div
           style={{
-            textAlign: "left",
             marginTop: 20,
             padding: 15,
             borderRadius: 15,
             background: "#020617",
             maxHeight: 400,
             overflowY: "auto",
-            fontSize: 14,
-            lineHeight: 1.6,
+            textAlign: "left",
+            textWrap: "pre-wrap",
+            lineHeight: "180%",
           }}
         >
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            rehypePlugins={[rehypeHighlight]}
-            components={{
-              code({ children }) {
-                return (
-                  <pre
-                    style={{
-                      background: "#0f172a",
-                      padding: 10,
-                      borderRadius: 10,
-                      overflowX: "auto",
-                    }}
-                  >
-                    <code>{children}</code>
-                  </pre>
-                );
-              },
-            }}
-          >
+          <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
             {response || "💬 Ask something to start..."}
           </ReactMarkdown>
         </div>
