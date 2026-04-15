@@ -1,5 +1,4 @@
 import json
-import time
 
 import ollama
 from fastapi import FastAPI
@@ -52,7 +51,6 @@ def generate_sse(prompt: str):
         content = chunk["message"]["content"]
         if content:
             yield f"data: {json.dumps(content)}\n\n"
-            time.sleep(0.01)  # smooth feel
 
     yield "data: [DONE]\n\n"
 
