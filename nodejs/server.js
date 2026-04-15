@@ -48,7 +48,7 @@ app.get("/chat-sse", async (req, res) => {
   for await (const chunk of stream) {
     const content = chunk.message.content;
     if (content) {
-      res.write(`data: ${content}\n\n`);
+      res.write(`data: ${JSON.stringify(content)}\n\n`);
     }
   }
 
