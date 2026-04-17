@@ -1,7 +1,7 @@
 import json
 
 import ollama
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
@@ -15,10 +15,10 @@ app.add_middleware(
 )
 
 
-def generate(prompt: str):
+def generate(messages):
     stream = ollama.chat(
         model="llama3.2:3b",
-        messages=[{"role": "user", "content": prompt}],
+        messages=messages,
         stream=True,
     )
 
@@ -28,10 +28,13 @@ def generate(prompt: str):
             yield content
 
 
-@app.get("/chat")
-def chat(prompt: str):
+@app.post("/chat")
+async def chat(req: Request):
+    body = await req.json()
+    messages = body.get("messages", [])
+
     return StreamingResponse(
-        generate(prompt),
+        generate(messages),
         media_type="text/plain",
         headers={
             "Cache-Control": "no-cache",
@@ -40,10 +43,10 @@ def chat(prompt: str):
     )
 
 
-def generate_sse(prompt: str):
+def generate_sse(messages):
     stream = ollama.chat(
         model="llama3.2:3b",
-        messages=[{"role": "user", "content": prompt}],
+        messages=messages,
         stream=True,
     )
 
@@ -56,9 +59,11 @@ def generate_sse(prompt: str):
 
 
 @app.get("/chat-sse")
-def chat_sse(prompt: str):
+def chat_sse(messages: str):
+    parsed_messages = json.loads(messages) if messages else []
+
     return StreamingResponse(
-        generate_sse(prompt),
+        generate_sse(parsed_messages),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

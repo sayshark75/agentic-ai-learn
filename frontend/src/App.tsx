@@ -1,14 +1,28 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
-import "highlight.js/styles/github-dark.css";
+import "highlight.js/styles/a11y-dark.css";
+
+type MessageType = { role: "user" | "assistant"; content: string };
 
 export default function App() {
   const [prompt, setPrompt] = useState("");
-  const [response, setResponse] = useState("");
-
+  const [messages, setMessages] = useState<MessageType[]>([]);
   const [mode, setMode] = useState("node-stream");
+  const [isLoading, setIsLoading] = useState(false);
+
+  const chatRef = useRef<HTMLDivElement>(null);
+
+  // Auto scroll to bottom
+  useEffect(() => {
+    if (chatRef.current) {
+      chatRef.current.scrollTo({
+        top: chatRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    }
+  }, [messages]);
 
   const getUrl = () => {
     switch (mode) {
@@ -25,70 +39,116 @@ export default function App() {
     }
   };
 
-  const handleFetchStream = async () => {
-    setResponse("");
-    const res = await fetch(`${getUrl()}?prompt=${encodeURIComponent(prompt)}`);
+  // ================= STREAM HANDLER =================
+  const handleFetchStream = async (msgs: MessageType[]) => {
+    setIsLoading(true);
+
+    const res = await fetch(getUrl(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: msgs }),
+    });
 
     if (!res.body) throw new Error("No body");
 
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
 
+    let fullText = "";
+
+    // Add empty assistant message
+    setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+
+    const assistantIndex = msgs.length;
+
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      setResponse((prev) => prev + decoder.decode(value));
+
+      const chunk = decoder.decode(value);
+      fullText += chunk;
+
+      setMessages((prev) => {
+        const updated = [...prev];
+        updated[assistantIndex] = { role: "assistant", content: fullText };
+        return updated;
+      });
     }
+
+    setIsLoading(false);
   };
 
-  const handleSSE = () => {
-    setResponse("");
-    const es = new EventSource(`${getUrl()}?prompt=${encodeURIComponent(prompt)}`);
+  // ================= SSE HANDLER =================
+  const handleSSE = (msgs: MessageType[]) => {
+    setIsLoading(true);
 
-    let buffer = "";
+    const es = new EventSource(`${getUrl()}?messages=${encodeURIComponent(JSON.stringify(msgs))}`);
+
+    let fullText = "";
+
+    setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+    const assistantIndex = msgs.length;
 
     es.onmessage = (e) => {
       if (e.data === "[DONE]") {
-        setResponse(buffer);
+        setIsLoading(false);
         es.close();
         return;
       }
 
-      const parsed = JSON.parse(e.data);
-      buffer += parsed;
+      const chunk = JSON.parse(e.data);
+      fullText += chunk;
 
-      setResponse(buffer);
+      setMessages((prev) => {
+        const updated = [...prev];
+        updated[assistantIndex] = { role: "assistant", content: fullText };
+        return updated;
+      });
+    };
+
+    es.onerror = () => {
+      setIsLoading(false);
+      es.close();
     };
   };
 
+  // ================= SUBMIT =================
   const handleSubmit = () => {
-    if (!prompt.trim()) return;
+    if (!prompt.trim() || isLoading) return;
+
+    const newMessage: MessageType = { role: "user", content: prompt };
+    const updatedMessages = [...messages, newMessage];
+
+    setMessages(updatedMessages);
+    setPrompt("");
 
     if (mode.includes("sse")) {
-      handleSSE();
+      handleSSE(updatedMessages);
     } else {
-      handleFetchStream();
+      handleFetchStream(updatedMessages);
     }
   };
 
+  const startNewChat = () => {
+    setMessages([]);
+    setPrompt("");
+  };
+
   return (
-    <div className="min-h-screen bg-[#0A0A0A] text-white font-sans flex flex-col">
-      {/* Top Bar - Grok Style Header */}
-      <div className="border-b border-white/10 bg-black/80 backdrop-blur-md py-4 px-6 flex items-center justify-between sticky top-0 z-50">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-linear-to-br from-purple-500 via-blue-500 to-cyan-400 rounded-full flex items-center justify-center text-xl font-bold">
-            S
-          </div>
+    <div className="min-h-screen mb-24 relative bg-[#0A0A0A] text-white flex flex-col font-sans">
+      {/* Header */}
+      <div className="border-b border-white/10 bg-black/90 backdrop-blur-xl py-4 px-6 flex items-center justify-between sticky top-0 z-50">
+        <div className="flex items-center gap-4">
+          <div className="w-9 h-9 bg-linear-to-br from-violet-500 to-cyan-400 rounded-2xl flex items-center justify-center text-2xl font-bold">S</div>
           <div>
-            <div className="text-left font-semibold text-xl tracking-tight">Syper</div>
-            <div className="text-[10px] text-slate-500 -mt-1">by a dev to a dev</div>
+            <div className="text-2xl font-semibold tracking-tight">Syper</div>
+            <div className="text-xs text-slate-500 -mt-0.5">Streaming AI Demo</div>
           </div>
         </div>
 
-        {/* Server Route Selector */}
-        <div className="flex items-center gap-4 text-sm">
-          <span className="text-slate-400">Backend:</span>
-          <div className="flex gap-1 bg-zinc-900 rounded-full p-1 border border-white/5">
+        <div className="flex items-center gap-4">
+          {/* Backend Selector */}
+          <div className="flex bg-zinc-900 rounded-3xl p-1 border border-white/10">
             {[
               { label: "Node Stream", value: "node-stream" },
               { label: "Node SSE", value: "node-sse" },
@@ -98,60 +158,94 @@ export default function App() {
               <button
                 key={opt.value}
                 onClick={() => setMode(opt.value)}
-                className={`px-4 py-1.5 rounded-full transition-all text-xs font-medium ${
-                  mode === opt.value ? "bg-white text-black shadow" : "text-slate-400 hover:text-white hover:bg-white/10"
+                className={`px-5 py-2 text-sm font-medium rounded-3xl transition-all ${
+                  mode === opt.value ? "bg-white text-black shadow" : "text-slate-400 hover:bg-white/10 hover:text-white"
                 }`}
               >
                 {opt.label}
               </button>
             ))}
           </div>
+
+          <button
+            onClick={startNewChat}
+            className="px-5 py-2 bg-white/10 hover:bg-white/15 rounded-3xl text-sm font-medium transition-colors flex items-center gap-2"
+          >
+            New Chat
+          </button>
         </div>
       </div>
 
-      {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col max-w-4xl mx-auto w-full px-4 py-8">
-        {/* Welcome / Empty State */}
-        {!response && (
-          <div className="flex-1 flex flex-col items-center justify-center text-center py-20">
-            <div className="w-20 h-20 bg-linear-to-br from-purple-500 via-blue-500 to-cyan-400 rounded-2xl flex items-center justify-center text-5xl mb-6 shadow-xl">
+      {/* Chat Area */}
+      <div className="flex-1 mx-auto w-full px-4 py-8 flex flex-col">
+        {messages.length === 0 ? (
+          <div className="flex-1 flex flex-col items-center justify-center text-center">
+            <div className="w-28 h-28 bg-linear-to-br from-violet-500 via-fuchsia-500 to-cyan-400 rounded-3xl flex items-center justify-center text-7xl mb-10 shadow-2xl">
               ⚡
             </div>
-            <h1 className="text-4xl font-semibold mb-3 tracking-tighter">Hello, I'm Syper</h1>
-            <p className="text-slate-400 max-w-md">Ask me anything. I'm powered by different streaming backends for testing.</p>
+            <h1 className="text-5xl font-bold tracking-tighter mb-4">Hello, I'm Syper</h1>
+            <p className="text-slate-400 text-xl max-w-md">
+              A beautiful real-time streaming chat interface.
+              <br />
+              Choose backend and start asking anything.
+            </p>
           </div>
-        )}
+        ) : (
+          <div ref={chatRef} className="flex-1 overflow-y-auto space-y-8 pb-12 pr-4">
+            {messages.map((msg, index) => (
+              <div key={index} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div
+                  className={`max-w-[78%] px-6 py-4 rounded-3xl ${
+                    msg.role === "user" ? "bg-linear-to-r from-blue-600 to-indigo-600" : "bg-zinc-800 border border-white/10"
+                  }`}
+                >
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+                    {msg.content}
+                  </ReactMarkdown>
+                </div>
+              </div>
+            ))}
 
-        {/* Response Area - Grok-like Chat Bubble */}
-        {response && (
-          <div className="bg-zinc-900/70 border text-left leading-[180%] border-white/10 rounded-3xl p-8 max-h-[65vh] overflow-y-auto prose prose-invert prose-slate max-w-none">
-            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
-              {response}
-            </ReactMarkdown>
+            {/* Loading Indicator */}
+            {isLoading && (
+              <div className="flex justify-start">
+                <div className="bg-zinc-800 border border-white/10 px-6 py-4 rounded-3xl flex items-center gap-3">
+                  <div className="flex gap-1.5">
+                    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></div>
+                    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></div>
+                    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></div>
+                  </div>
+                  <span className="text-slate-400 text-sm">Syper is thinking...</span>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* Bottom Input Bar - Fixed like Grok */}
-      <div className="border-t border-white/10 bg-black/80 backdrop-blur-md p-6 sticky bottom-0">
+      {/* Input Bar */}
+      <div className="border-t fixed bottom-0 left-0 w-full border-white/10 bg-black/90 backdrop-blur-xl p-6">
         <div className="max-w-4xl mx-auto">
-          <div className="relative flex gap-3">
+          <div className="flex gap-3">
             <input
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-              placeholder="Ask syper anything..."
-              className="flex-1 bg-zinc-900 border border-white/10 focus:border-purple-500 rounded-3xl px-7 py-4 text-lg placeholder:text-slate-500 outline-none transition-all"
+              disabled={isLoading}
+              placeholder="Message Syper..."
+              className="flex-1 bg-zinc-900 border border-white/10 focus:border-violet-500 rounded-3xl px-7 py-4 text-lg placeholder:text-slate-500 outline-none transition-all disabled:opacity-70"
             />
 
             <button
               onClick={handleSubmit}
-              disabled={!prompt.trim()}
-              className="bg-white hover:bg-slate-200 disabled:bg-zinc-700 disabled:text-slate-500 text-black font-semibold px-8 rounded-3xl transition-all flex items-center justify-center"
+              disabled={!prompt.trim() || isLoading}
+              className="bg-white hover:bg-slate-100 disabled:bg-zinc-700 disabled:text-slate-400 text-black font-semibold px-10 rounded-3xl transition-all flex items-center justify-center min-w-27.5"
             >
-              Send
+              {isLoading ? "Sending..." : "Send"}
             </button>
           </div>
+
+          <p className="text-center text-xs text-slate-500 mt-4">Real-time streaming demo • Choose your backend above</p>
         </div>
       </div>
     </div>
