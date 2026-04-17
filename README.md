@@ -74,7 +74,7 @@ npm run dev
 
 ## 🔥 Upcoming Improvements
 
-[X] Chat history (multi-turn conversation) [Concept added, Learning It.]
+[x] Chat history (multi-turn conversation) [Concept added, Learning It.]
 
 - System prompts & role-based behavior
 - Tool calling (calculator, APIs, utilities)
