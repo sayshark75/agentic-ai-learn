@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
-import "highlight.js/styles/a11y-dark.css";
+import "highlight.js/styles/github-dark.css";
 
 type MessageType = { role: "user" | "assistant"; content: string };
 
@@ -12,17 +12,13 @@ export default function App() {
   const [mode, setMode] = useState("node-stream");
   const [isLoading, setIsLoading] = useState(false);
 
-  const chatRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Auto scroll to bottom
   useEffect(() => {
-    if (chatRef.current) {
-      chatRef.current.scrollTo({
-        top: chatRef.current.scrollHeight,
-        behavior: "smooth",
-      });
+    if (isLoading) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages]);
+  }, [messages, isLoading]);
 
   const getUrl = () => {
     switch (mode) {
@@ -39,7 +35,6 @@ export default function App() {
     }
   };
 
-  // ================= STREAM HANDLER =================
   const handleFetchStream = async (msgs: MessageType[]) => {
     setIsLoading(true);
 
@@ -55,11 +50,12 @@ export default function App() {
     const decoder = new TextDecoder();
 
     let fullText = "";
+    let assistantIndex = -1;
 
-    // Add empty assistant message
-    setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
-
-    const assistantIndex = msgs.length;
+    setMessages((prev) => {
+      assistantIndex = prev.length;
+      return [...prev, { role: "assistant", content: "" }];
+    });
 
     while (true) {
       const { done, value } = await reader.read();
@@ -70,7 +66,12 @@ export default function App() {
 
       setMessages((prev) => {
         const updated = [...prev];
-        updated[assistantIndex] = { role: "assistant", content: fullText };
+        if (assistantIndex !== -1) {
+          updated[assistantIndex] = {
+            role: "assistant",
+            content: fullText,
+          };
+        }
         return updated;
       });
     }
@@ -78,7 +79,6 @@ export default function App() {
     setIsLoading(false);
   };
 
-  // ================= SSE HANDLER =================
   const handleSSE = (msgs: MessageType[]) => {
     setIsLoading(true);
 
@@ -112,7 +112,6 @@ export default function App() {
     };
   };
 
-  // ================= SUBMIT =================
   const handleSubmit = () => {
     if (!prompt.trim() || isLoading) return;
 
@@ -177,7 +176,7 @@ export default function App() {
       </div>
 
       {/* Chat Area */}
-      <div className="flex-1 mx-auto w-full px-4 py-8 flex flex-col">
+      <div className="flex-1 mx-auto w-full px-4 py-8 flex flex-col min-h-0">
         {messages.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center text-center">
             <div className="w-28 h-28 bg-linear-to-br from-violet-500 via-fuchsia-500 to-cyan-400 rounded-3xl flex items-center justify-center text-7xl mb-10 shadow-2xl">
@@ -191,7 +190,7 @@ export default function App() {
             </p>
           </div>
         ) : (
-          <div ref={chatRef} className="flex-1 overflow-y-auto space-y-8 pb-12 pr-4">
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-8 pb-32 pr-4">
             {messages.map((msg, index) => (
               <div key={index} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                 <div
@@ -221,6 +220,7 @@ export default function App() {
             )}
           </div>
         )}
+        <div ref={bottomRef} />
       </div>
 
       {/* Input Bar */}
