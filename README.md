@@ -74,7 +74,10 @@ npm run dev
 
 ## 🔥 Upcoming Improvements
 
-✅ Chat history (multi-turn conversation) [Concept added, Learning It.]
+✅ Chat history (multi-turn conversation)
+
+> can continue the conversation with set of messages of user and assistant.
+> provides continued support and follow up for you questions for one chat session.
 
 - System prompts & role-based behavior
 - Tool calling (calculator, APIs, utilities)
