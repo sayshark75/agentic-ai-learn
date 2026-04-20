@@ -11,6 +11,7 @@ export default function App() {
   const [messages, setMessages] = useState<MessageType[]>([]);
   const [mode, setMode] = useState("node-stream");
   const [isLoading, setIsLoading] = useState(false);
+  const [plan, setPlan] = useState("free");
 
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -41,7 +42,10 @@ export default function App() {
     const res = await fetch(getUrl(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: msgs }),
+      body: JSON.stringify({
+        messages: msgs,
+        plan,
+      }),
     });
 
     if (!res.body) throw new Error("No body");
@@ -82,12 +86,15 @@ export default function App() {
   const handleSSE = (msgs: MessageType[]) => {
     setIsLoading(true);
 
-    const es = new EventSource(`${getUrl()}?messages=${encodeURIComponent(JSON.stringify(msgs))}`);
-
+    const es = new EventSource(`${getUrl()}?messages=${encodeURIComponent(JSON.stringify(msgs))}&plan=${plan}`);
     let fullText = "";
 
-    setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
-    const assistantIndex = msgs.length;
+    let assistantIndex = -1;
+
+    setMessages((prev) => {
+      assistantIndex = prev.length;
+      return [...prev, { role: "assistant", content: "" }];
+    });
 
     es.onmessage = (e) => {
       if (e.data === "[DONE]") {
@@ -149,12 +156,33 @@ export default function App() {
           {/* Backend Selector */}
           <div className="flex bg-zinc-900 rounded-3xl p-1 border border-white/10">
             {[
-              { label: "Node Stream", value: "node-stream" },
-              { label: "Node SSE", value: "node-sse" },
-              { label: "Python Stream", value: "python-stream" },
-              { label: "Python SSE", value: "python-sse" },
+              {
+                label: "Node Stream",
+                value: "node-stream",
+                title:
+                  "One direction stream, provides chunks of data one by one, as requested by the client to the server. directtion is from server to client, just requested by a client to server.",
+              },
+              {
+                label: "Node SSE",
+                value: "node-sse",
+                title:
+                  "One directional stream, provides data in same chunk format as the stream does, but we connect and keep the connection open on backend to get data from server, here server provides us data one by one, and  we capture the incoming message event, and parse the data.",
+              },
+              {
+                label: "Python Stream",
+                value: "python-stream",
+                title:
+                  "One direction stream, based on the generators, provides chunks of data one by one, as requested by the client to the server. directtion is from server to client, just requested by a client to server.",
+              },
+              {
+                label: "Python SSE",
+                value: "python-sse",
+                title:
+                  "One directional stream, based on the generators, provides data in same chunk format as the stream does, but we connect and keep the connection open on backend to get data from server, here server provides us data one by one, and  we capture the incoming message event, and parse the data.",
+              },
             ].map((opt) => (
               <button
+                title={opt.title}
                 key={opt.value}
                 onClick={() => setMode(opt.value)}
                 className={`px-5 py-2 text-sm font-medium rounded-3xl transition-all ${
@@ -227,6 +255,21 @@ export default function App() {
       <div className="border-t fixed bottom-0 left-0 w-full border-white/10 bg-black/90 backdrop-blur-xl p-6">
         <div className="max-w-4xl mx-auto">
           <div className="flex gap-3">
+            <select
+              value={plan}
+              onChange={(e) => setPlan(e.target.value)}
+              className="bg-zinc-900 border border-white/10 rounded-2xl px-3 py-2 text-sm"
+            >
+              <option title="only plain text role, less interest and less code examples." value="free">
+                Free
+              </option>
+              <option value="basic" title={"text with markdown, medium interest, and less code examples."}>
+                Basic
+              </option>
+              <option value="premium" title="High interest in conversations, discuss more scenarios, more code block examples.">
+                Premium
+              </option>
+            </select>
             <input
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}

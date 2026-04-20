@@ -79,7 +79,14 @@ npm run dev
 > can continue the conversation with set of messages of user and assistant.
 > provides continued support and follow up for you questions for one chat session.
 
-- System prompts & role-based behavior
+✅ System prompts & role-based behavior
+
+> we can define the role for the user, there is only one additional role than user and assistant, it is system role
+> I added dummy subscription based system role, so it modifies the model to behave as per the plans.
+> Ofcourse, it is a basic one, in the real scenario, we use backend user authentication, JWT token based validation of the subscriptions, and then on that, we decide behaviour of the model.
+> System prompt helps isolate the model into something specific, control its boundary towards some specific topic, skill, etc. for example `Senior frontend developer`, `Senior backend developer`, `Having all historical knowledge of Cricket`, etc.
+
+- Conversation Memory + Context Compression
 - Tool calling (calculator, APIs, utilities)
 - Function execution layer (AI → real functions)
 - File upload & document understanding (CSV, text, PDF)
