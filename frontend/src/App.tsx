@@ -13,6 +13,9 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [plan, setPlan] = useState("free");
 
+  const controllerRef = useRef<AbortController | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
+
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -39,6 +42,12 @@ export default function App() {
   const handleFetchStream = async (msgs: MessageType[]) => {
     setIsLoading(true);
 
+    // cancel previous
+    controllerRef.current?.abort();
+
+    const controller = new AbortController();
+    controllerRef.current = controller;
+
     const res = await fetch(getUrl(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -46,6 +55,7 @@ export default function App() {
         messages: msgs,
         plan,
       }),
+      signal: controller.signal,
     });
 
     if (!res.body) throw new Error("No body");
@@ -86,7 +96,13 @@ export default function App() {
   const handleSSE = (msgs: MessageType[]) => {
     setIsLoading(true);
 
+    // close previous connection
+    eventSourceRef.current?.close();
+
     const es = new EventSource(`${getUrl()}?messages=${encodeURIComponent(JSON.stringify(msgs))}&plan=${plan}`);
+
+    eventSourceRef.current = es;
+
     let fullText = "";
 
     let assistantIndex = -1;
@@ -119,8 +135,16 @@ export default function App() {
     };
   };
 
-  const handleSubmit = () => {
-    if (!prompt.trim() || isLoading) return;
+  const handleSubmit = (event: "stop" | "send") => {
+    if (event === "stop") {
+      controllerRef.current?.abort();
+      eventSourceRef.current?.close();
+      setIsLoading(false);
+      return;
+    }
+    if (!prompt.trim()) return;
+
+    controllerRef.current?.abort();
 
     const newMessage: MessageType = { role: "user", content: prompt };
     const updatedMessages = [...messages, newMessage];
@@ -150,6 +174,7 @@ export default function App() {
             <div className="text-2xl font-semibold tracking-tight">Syper</div>
             <div className="text-xs text-slate-500 -mt-0.5">Streaming AI Demo</div>
           </div>
+          <div className="text-xs bg-white rounded-full px-2 py-1 text-black capitalize">{plan}</div>
         </div>
 
         <div className="flex items-center gap-4">
@@ -273,18 +298,17 @@ export default function App() {
             <input
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+              onKeyDown={(e) => e.key === "Enter" && handleSubmit("send")}
               disabled={isLoading}
               placeholder="Message Syper..."
               className="flex-1 bg-zinc-900 border border-white/10 focus:border-violet-500 rounded-3xl px-7 py-4 text-lg placeholder:text-slate-500 outline-none transition-all disabled:opacity-70"
             />
 
             <button
-              onClick={handleSubmit}
-              disabled={!prompt.trim() || isLoading}
+              onClick={() => handleSubmit(isLoading ? "stop" : "send")}
               className="bg-white hover:bg-slate-100 disabled:bg-zinc-700 disabled:text-slate-400 text-black font-semibold px-10 rounded-3xl transition-all flex items-center justify-center min-w-27.5"
             >
-              {isLoading ? "Sending..." : "Send"}
+              {isLoading ? "Stop" : "Send"}
             </button>
           </div>
 
