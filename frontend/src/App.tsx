@@ -4,7 +4,7 @@ import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import "highlight.js/styles/github-dark.css";
 
-type MessageType = { role: "user" | "assistant"; content: string };
+type MessageType = { role: "user" | "assistant" | "tool"; content: string };
 
 export default function App() {
   const [prompt, setPrompt] = useState("");

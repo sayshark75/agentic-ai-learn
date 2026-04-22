@@ -86,7 +86,14 @@ npm run dev
 > Ofcourse, it is a basic one, in the real scenario, we use backend `user authentication`, `JWT token` based validation of the subscriptions, and then on that, we decide behaviour of the model.
 > `System prompt` helps isolate the model into something specific, control its boundary towards some specific topic, skill, etc. for example `Senior frontend developer`, `Senior backend developer`, `Having all historical knowledge of Cricket`, etc.
 
-- Tool calling (calculator, APIs, utilities)
+✅ Tool calling (calculator, APIs, utilities)
+
+> Added a cheap tool to calculate the math calculations.
+> It is a very hectic process to handle the propmt.
+> The major pain point to let your LLM understand the context and decide when to provide code json or the simple chats.
+> I added calculator, but still sometimes it by himself calculates, and sometimes it provides me the json to call the tool
+> I also modified the prompt for strictness, then it is only providing me json responses, for normal chats as well.
+
 - Function execution layer (AI → real functions)
 - File upload & document understanding (CSV, text, PDF)
 - Persistent memory (DB / vector store)
