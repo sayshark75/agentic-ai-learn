@@ -86,7 +86,6 @@ npm run dev
 > Ofcourse, it is a basic one, in the real scenario, we use backend `user authentication`, `JWT token` based validation of the subscriptions, and then on that, we decide behaviour of the model.
 > `System prompt` helps isolate the model into something specific, control its boundary towards some specific topic, skill, etc. for example `Senior frontend developer`, `Senior backend developer`, `Having all historical knowledge of Cricket`, etc.
 
-- Conversation Memory + Context Compression
 - Tool calling (calculator, APIs, utilities)
 - Function execution layer (AI → real functions)
 - File upload & document understanding (CSV, text, PDF)
@@ -109,6 +108,7 @@ npm run dev
 - Web scraping + live data tools
 - Multi-agent workflows (agents collaborating)
 - Observability (logs, tracing, debugging tools)
+- Conversation Memory + Context Compression.
 
 ---
 
