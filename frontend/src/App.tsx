@@ -9,7 +9,6 @@ type MessageType = { role: "user" | "assistant" | "tool"; content: string };
 export default function App() {
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState<MessageType[]>([]);
-  const [mode, setMode] = useState("node-stream");
   const [isLoading, setIsLoading] = useState(false);
   const [plan, setPlan] = useState("free");
 
@@ -24,21 +23,6 @@ export default function App() {
     }
   }, [messages, isLoading]);
 
-  const getUrl = () => {
-    switch (mode) {
-      case "node-stream":
-        return "http://localhost:8000/chat";
-      case "node-sse":
-        return "http://localhost:8000/chat-sse";
-      case "python-stream":
-        return "http://localhost:8001/chat";
-      case "python-sse":
-        return "http://localhost:8001/chat-sse";
-      default:
-        return "";
-    }
-  };
-
   const handleFetchStream = async (msgs: MessageType[]) => {
     setIsLoading(true);
 
@@ -48,7 +32,7 @@ export default function App() {
     const controller = new AbortController();
     controllerRef.current = controller;
 
-    const res = await fetch(getUrl(), {
+    const res = await fetch("http://localhost:8000/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -75,7 +59,7 @@ export default function App() {
       const { done, value } = await reader.read();
       if (done) break;
 
-      const chunk = decoder.decode(value);
+      const chunk = decoder.decode(value, { stream: true });
       fullText += chunk;
 
       setMessages((prev) => {
@@ -91,48 +75,6 @@ export default function App() {
     }
 
     setIsLoading(false);
-  };
-
-  const handleSSE = (msgs: MessageType[]) => {
-    setIsLoading(true);
-
-    // close previous connection
-    eventSourceRef.current?.close();
-
-    const es = new EventSource(`${getUrl()}?messages=${encodeURIComponent(JSON.stringify(msgs))}&plan=${plan}`);
-
-    eventSourceRef.current = es;
-
-    let fullText = "";
-
-    let assistantIndex = -1;
-
-    setMessages((prev) => {
-      assistantIndex = prev.length;
-      return [...prev, { role: "assistant", content: "" }];
-    });
-
-    es.onmessage = (e) => {
-      if (e.data === "[DONE]") {
-        setIsLoading(false);
-        es.close();
-        return;
-      }
-
-      const chunk = JSON.parse(e.data);
-      fullText += chunk;
-
-      setMessages((prev) => {
-        const updated = [...prev];
-        updated[assistantIndex] = { role: "assistant", content: fullText };
-        return updated;
-      });
-    };
-
-    es.onerror = () => {
-      setIsLoading(false);
-      es.close();
-    };
   };
 
   const handleSubmit = (event: "stop" | "send") => {
@@ -151,12 +93,7 @@ export default function App() {
 
     setMessages(updatedMessages);
     setPrompt("");
-
-    if (mode.includes("sse")) {
-      handleSSE(updatedMessages);
-    } else {
-      handleFetchStream(updatedMessages);
-    }
+    handleFetchStream(updatedMessages);
   };
 
   const startNewChat = () => {
@@ -178,47 +115,6 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-4">
-          {/* Backend Selector */}
-          <div className="flex bg-zinc-900 rounded-3xl p-1 border border-white/10">
-            {[
-              {
-                label: "Node Stream",
-                value: "node-stream",
-                title:
-                  "One direction stream, provides chunks of data one by one, as requested by the client to the server. directtion is from server to client, just requested by a client to server.",
-              },
-              {
-                label: "Node SSE",
-                value: "node-sse",
-                title:
-                  "One directional stream, provides data in same chunk format as the stream does, but we connect and keep the connection open on backend to get data from server, here server provides us data one by one, and  we capture the incoming message event, and parse the data.",
-              },
-              {
-                label: "Python Stream",
-                value: "python-stream",
-                title:
-                  "One direction stream, based on the generators, provides chunks of data one by one, as requested by the client to the server. directtion is from server to client, just requested by a client to server.",
-              },
-              {
-                label: "Python SSE",
-                value: "python-sse",
-                title:
-                  "One directional stream, based on the generators, provides data in same chunk format as the stream does, but we connect and keep the connection open on backend to get data from server, here server provides us data one by one, and  we capture the incoming message event, and parse the data.",
-              },
-            ].map((opt) => (
-              <button
-                title={opt.title}
-                key={opt.value}
-                onClick={() => setMode(opt.value)}
-                className={`px-5 py-2 text-sm font-medium rounded-3xl transition-all ${
-                  mode === opt.value ? "bg-white text-black shadow" : "text-slate-400 hover:bg-white/10 hover:text-white"
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-
           <button
             onClick={startNewChat}
             className="px-5 py-2 bg-white/10 hover:bg-white/15 rounded-3xl text-sm font-medium transition-colors flex items-center gap-2"
